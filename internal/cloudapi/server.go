@@ -20,6 +20,7 @@ import (
 	"github.com/osbuild/osbuild-composer/internal/distro"
 	"github.com/osbuild/osbuild-composer/internal/distroregistry"
 	"github.com/osbuild/osbuild-composer/internal/ostree"
+	"github.com/osbuild/osbuild-composer/internal/prometheus"
 	"github.com/osbuild/osbuild-composer/internal/rpmmd"
 	"github.com/osbuild/osbuild-composer/internal/target"
 	"github.com/osbuild/osbuild-composer/internal/worker"
@@ -54,6 +55,7 @@ func (server *Server) Handler(path string, identityFilter []string) http.Handler
 		server.identityFilter = identityFilter
 		r.Use(server.VerifyIdentityHeader)
 	}
+	r.Use(server.IncRequests)
 	r.Route(path, func(r chi.Router) {
 		HandlerFromMux(server, r)
 	})
@@ -96,6 +98,16 @@ func (server *Server) VerifyIdentityHeader(next http.Handler) http.Handler {
 			}
 		}
 		http.Error(w, "Account not allowed", http.StatusNotFound)
+	})
+}
+
+func (s *Server) IncRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		prometheus.TotalRequests.Inc()
+		if strings.HasSuffix(r.URL.Path, "/compose") {
+			prometheus.ComposeRequests.Inc()
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
